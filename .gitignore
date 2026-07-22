@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+frontend/node_modules/
+
+# Next.js
+frontend/.next/
+frontend/out/
+next-env.d.ts
+frontend/tsconfig.tsbuildinfo
+
+# Env
+frontend/.env.local
+.env
+
+# Foundry
+contracts/cache/
+contracts/out/
+contracts/lib/
+!contracts/lib/.gitkeep
+
+# OS / editor
+.DS_Store
+*.log

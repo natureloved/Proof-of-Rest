@@ -1,0 +1,11 @@
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+use_literal_content = true
+
+eth-rpc-url = "https://testnet-rpc.monad.xyz"
+chain_id = 10143
+
+[fmt]
+line_length = 100
