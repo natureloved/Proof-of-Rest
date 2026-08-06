@@ -15,6 +15,7 @@ import {
 import { parseEther } from "viem";
 import { useNow, fmtDuration, fmtMon } from "@/lib/format";
 import { useSessionAlerts } from "@/lib/useSessionAlerts";
+import { friendlyError } from "@/lib/agent/errors";
 import { Vitals } from "./Vitals";
 
 type Phase = "idle" | "active" | "cooldown";
@@ -365,22 +366,9 @@ export function SessionCard() {
       )}
       {writeError && (
         <p className="mt-3 font-mono text-xs text-danger">
-          {shortErr(writeError.message)}
+          {friendlyError(writeError.message)}
         </p>
       )}
     </div>
   );
-}
-
-function shortErr(msg: string): string {
-  if (msg.includes("CooldownActive")) return "Cooldown active — wait for it to clear.";
-  if (msg.includes("SessionAlreadyActive")) return "A session is already active.";
-  if (msg.includes("ZeroStake")) return "Stake must be greater than zero.";
-  if (msg.includes("MinStakeNotMet")) return "Stake is below the minimum.";
-  if (msg.includes("NoSponsoredStake")) return "No sponsored stake available for you.";
-  if (msg.includes("SessionNotActive")) return "No active session to end.";
-  if (msg.includes("User rejected") || msg.includes("User denied"))
-    return "Transaction rejected.";
-  if (msg.includes("insufficient funds")) return "Insufficient MON for stake + gas.";
-  return msg.slice(0, 120);
 }

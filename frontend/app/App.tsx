@@ -4,6 +4,7 @@ import { Header } from "@/components/Header";
 import { Hero } from "@/components/Hero";
 import { HowItWorks } from "@/components/HowItWorks";
 import { SessionCard } from "@/components/SessionCard";
+import { RestGuardian } from "@/components/RestGuardian";
 import { StatsPanel } from "@/components/StatsPanel";
 import { BadgeGallery } from "@/components/BadgeGallery";
 import { HistoryLog } from "@/components/HistoryLog";
@@ -25,6 +26,10 @@ export default function App() {
         <HowItWorks />
       </div>
 
+      <div className="mt-6">
+        <RestGuardian />
+      </div>
+
       <section className="mt-6 grid grid-cols-1 gap-4 lg:grid-cols-2">
         <div className="space-y-4">
           <SessionCard />
@@ -41,7 +46,7 @@ export default function App() {
 
       <footer className="mt-8 flex flex-wrap items-center justify-between gap-2 border-t border-forest-600 pt-4 font-mono text-[10px] text-grass/40">
         <span>
-          Proof of Rest · BuildAnything: Spark ·{" "}
+          Proof of Rest · Monad Playground ·{" "}
           <a className="underline hover:text-grass" href={CONTRACT_URLS.proofOfRest} target="_blank" rel="noreferrer">
             contract
           </a>{" "}
@@ -50,7 +55,7 @@ export default function App() {
             badges
           </a>
         </span>
-        <span>lock MON · rest · let the chain enforce the break</span>
+        <span>a safe onchain agent builds &amp; verifies — you sign</span>
       </footer>
     </main>
   );

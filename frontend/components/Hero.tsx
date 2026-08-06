@@ -17,6 +17,11 @@ export function Hero() {
         Lock MON to start a work session. Stop in time and reclaim it. Overrun
         and the chain keeps a cut — then makes you take a real break.
       </p>
+      <p className="mx-auto mt-3 max-w-xl font-mono text-[11px] leading-relaxed text-grass/40">
+        Now with <span className="text-grass/70">RestGuardian</span> — a safe onchain agent
+        (built on the Moss pattern) that turns plain English into verified, ready-to-sign
+        transactions. It builds &amp; verifies; it never signs or sends. You do.
+      </p>
     </section>
   );
 }
