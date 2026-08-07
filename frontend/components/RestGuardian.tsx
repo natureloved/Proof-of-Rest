@@ -12,6 +12,7 @@ import type { PublicClient } from "viem";
 import { PROOF_OF_REST_ADDRESS, PROOF_OF_REST_ABI } from "@/lib/contracts";
 import { classifyIntent, llmEnabled } from "@/lib/agent/llm";
 import { buildPlan, type AgentPlan } from "@/lib/agent/plan";
+import { friendlyError } from "@/lib/agent/errors";
 import { useParticipants } from "@/lib/useParticipants";
 
 // A single audit-trail entry: the "explain, then do" record of what the agent
@@ -132,19 +133,27 @@ export function RestGuardian() {
 
       setPlan(built);
     } catch (err) {
-      // buildPlan guards its own reads, but a stalled/throwing RPC call (the
-      // public endpoint rate-limits at 15 req/sec) could still reject here.
-      // Surface it as a receipt instead of leaving the UI stuck on "Thinking…".
+      // buildPlan guards its own reads and simulate() swallows its own errors,
+      // so a throw here is unusual (classifyIntent, a read layer, or an
+      // unexpected RPC reject). Surface the REAL message instead of a guessed
+      // one — an honest error beats "it's probably rate limiting."
       console.error("[RestGuardian] submit failed", err);
+      const raw = err instanceof Error ? err.message : String(err);
+      const short = friendlyError(raw);
+      const rateLimited = /429|rate.?limit|15 ?req|too many/i.test(raw);
       setPlan({
         intent: { kind: "unknown", source: "deterministic", rawText: text },
         summary: "Something went wrong",
-        consequence:
-          "The agent couldn't finish building your plan. The Monad Testnet RPC rate-limits at 15 req/sec — wait a moment and try again.",
+        consequence: rateLimited
+          ? "The Monad Testnet RPC rate-limits at 15 req/sec — wait a moment and try again."
+          : short,
         warnings: [],
         receipt: [
           "❌ Couldn't complete the request.",
-          "The public testnet-rpc.monad.xyz caps at 15 req/sec — wait a second and retry.",
+          short,
+          rateLimited
+            ? "The public testnet-rpc.monad.xyz caps at 15 req/sec — wait a second and retry."
+            : "Check the browser console for the full error.",
         ],
         canSign: false,
         simulation: "skipped",
