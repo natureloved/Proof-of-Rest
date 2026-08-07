@@ -1,8 +1,7 @@
 # Proof of Rest
 
 An **onchain commitment device for solo builders who overwork**, built on
-**Monad Testnet** (chain ID 10143). Originally shipped for **BuildAnything: Spark**;
-now extended for **Monad Playground** with **RestGuardian**, a safe onchain agent.
+**Monad Testnet** (chain ID 10143). Shipped for **Monad Playground** with **RestGuardian**, a safe onchain agent.
 
 Lock a MON stake to start a work session. End the session within the time limit
 and reclaim your stake (plus a slice of the community reward pool). Run past the
