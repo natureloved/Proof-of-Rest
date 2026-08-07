@@ -54,10 +54,13 @@ function fmtMon(wei: bigint): string {
   return parseFloat(formatEther(wei)).toFixed(4);
 }
 
-function fmtDuration(seconds: number): string {
-  const h = Math.floor(seconds / 3600);
-  const m = Math.floor((seconds % 3600) / 60);
-  const s = seconds % 60;
+function fmtDuration(seconds: number | bigint): string {
+  // Coerce defensively: this does number arithmetic, so a bigint argument would
+  // throw "Cannot mix BigInt and other types". Number() is safe on both.
+  const total = Number(seconds);
+  const h = Math.floor(total / 3600);
+  const m = Math.floor((total % 3600) / 60);
+  const s = total % 60;
   const pad = (n: number) => n.toString().padStart(2, "0");
   return `${pad(h)}:${pad(m)}:${pad(s)}`;
 }
@@ -133,20 +136,33 @@ async function loadState(
     const val = <T>(i: number, fallback: T): T =>
       results[i]?.status === "success" ? (results[i].result as T) : fallback;
 
+    // Coerce every scalar to bigint at this single boundary. viem decodes small
+    // Solidity ints (<= uint48) to a JS `number` and larger ones to `bigint` — so
+    // penaltyBps/watchdogBps/successBonusBps (uint16) and streak/sessionsCompleted/
+    // sessionsForfeited (uint32) come back as numbers, while stakes/pool (uint256)
+    // and durations (uint64) come back as bigints. Downstream math mixes them with
+    // `10000n` literals, and `bigint * number` throws "Cannot mix BigInt and other
+    // types". BigInt() is a no-op on a bigint and lifts a number, so forcing every
+    // scalar to bigint here makes OnChainState's types honest and the math safe.
+    const big = (i: number): bigint => {
+      const r = results[i];
+      return r?.status === "success" ? BigInt(r.result as bigint | number) : 0n;
+    };
+
     return {
       session: val<readonly [bigint, bigint, boolean]>(0, [0n, 0n, false]),
-      lastEndTime: val<bigint>(1, 0n),
-      streak: val<bigint>(2, 0n),
-      sessionsCompleted: val<bigint>(3, 0n),
-      sessionsForfeited: val<bigint>(4, 0n),
-      maxSessionDuration: val<bigint>(5, 0n),
-      cooldownPeriod: val<bigint>(6, 0n),
-      penaltyBps: val<bigint>(7, 0n),
-      watchdogBps: val<bigint>(8, 0n),
-      successBonusBps: val<bigint>(9, 0n),
-      minStake: val<bigint>(10, 0n),
-      rewardPool: val<bigint>(11, 0n),
-      sponsoredStake: val<bigint>(12, 0n),
+      lastEndTime: big(1),
+      streak: big(2),
+      sessionsCompleted: big(3),
+      sessionsForfeited: big(4),
+      maxSessionDuration: big(5),
+      cooldownPeriod: big(6),
+      penaltyBps: big(7),
+      watchdogBps: big(8),
+      successBonusBps: big(9),
+      minStake: big(10),
+      rewardPool: big(11),
+      sponsoredStake: big(12),
     };
   } catch (err) {
     console.error("[RestGuardian] loadState multicall failed:", err);
