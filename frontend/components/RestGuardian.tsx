@@ -79,10 +79,25 @@ export function RestGuardian() {
   const busy = isPending || isConfirming;
 
   const submit = async (text: string) => {
-    if (!text.trim() || !publicClient || !address) return;
+    if (!text.trim()) return;
     setThinking(true);
     setPlan(null);
     resetWrite();
+
+    // Abort if publicClient or address became undefined after the user clicked.
+    if (!publicClient || !address) {
+      setPlan({
+        intent: { kind: "unknown", source: "deterministic", rawText: text },
+        summary: "Wallet not ready",
+        consequence: "Connect your wallet to Monad Testnet and try again.",
+        warnings: [],
+        receipt: ["❌ No connected wallet or RPC client available."],
+        canSign: false,
+        simulation: "skipped",
+      });
+      setThinking(false);
+      return;
+    }
 
     // discover → parse intent (LLM or deterministic) …
     const intent = await classifyIntent(text);

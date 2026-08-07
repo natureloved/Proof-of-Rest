@@ -63,121 +63,93 @@ function fmtDuration(seconds: number): string {
 }
 
 /**
- * Discover/load: read current on-chain state for the connected user. Returns
- * undefined on RPC failure so the agent can surface a friendly "can't reach
- * the chain" rather than crashing mid-plan.
+ * Discover/load: read all needed on-chain state in a SINGLE request.
+ *
+ * The public testnet-rpc.monad.xyz endpoint rate-limits at 15 requests/sec
+ * *across the whole page* — and the page already spends much of that budget on
+ * StatsPanel / SessionCard / leaderboard polling. Firing 13 separate reads (even
+ * throttled) piles onto that shared budget and trips HTTP 429. So we batch all
+ * 13 calls into one Multicall3 request: 13 reads → 1 request. Multicall3 is
+ * deployed at the canonical address on Monad testnet; we pass it explicitly
+ * because the chain definition in contracts.ts doesn't declare it.
+ *
+ * We use `allowFailure: true` because `minStake()` reverts on the deployed
+ * contract (the getter is in the ABI but non-functional on the deployed
+ * bytecode). SessionCard already tolerates this via `?? 0n`; we mirror that
+ * here — a single reverting getter must not sink the whole plan. Any per-call
+ * failure other than that is defaulted to a safe zero-ish value, and only a
+ * total request failure (RPC unreachable / 429) returns undefined so the agent
+ * surfaces a friendly "can't reach the chain" rather than crashing mid-plan.
  */
+const MULTICALL3_ADDRESS = "0xcA11bde05977b3631167028862bE2a173976CA11" as `0x${string}`;
+
+// The per-call shape viem returns under `allowFailure: true`. We type it
+// ourselves because the `contracts as never` cast (needed for the untyped ABI)
+// collapses viem's inferred result tuple to `never`.
+type MulticallEntry =
+  | { status: "success"; result: unknown; error?: undefined }
+  | { status: "failure"; result?: undefined; error: Error };
+
 async function loadState(
   publicClient: PublicClient,
   address: `0x${string}`,
   contractAddress: `0x${string}`,
   abi: unknown,
 ): Promise<OnChainState | undefined> {
+  const base = { address: contractAddress, abi: abi as never } as const;
+  const contracts = [
+    { ...base, functionName: "sessions", args: [address] },
+    { ...base, functionName: "lastEndTime", args: [address] },
+    { ...base, functionName: "streak", args: [address] },
+    { ...base, functionName: "sessionsCompleted", args: [address] },
+    { ...base, functionName: "sessionsForfeited", args: [address] },
+    { ...base, functionName: "maxSessionDuration" },
+    { ...base, functionName: "cooldownPeriod" },
+    { ...base, functionName: "penaltyBps" },
+    { ...base, functionName: "watchdogBps" },
+    { ...base, functionName: "successBonusBps" },
+    { ...base, functionName: "minStake" },
+    { ...base, functionName: "rewardPool" },
+    { ...base, functionName: "sponsoredStake", args: [address] },
+  ];
+
   try {
-    const [
-      session,
-      lastEndTime,
-      streak,
-      sessionsCompleted,
-      sessionsForfeited,
-      maxSessionDuration,
-      cooldownPeriod,
-      penaltyBps,
-      watchdogBps,
-      successBonusBps,
-      minStake,
-      rewardPool,
-      sponsoredStake,
-    ] = await Promise.all([
-      publicClient.readContract({
-        address: contractAddress,
-        abi: abi as never,
-        functionName: "sessions",
-        args: [address],
-      }),
-      publicClient.readContract({
-        address: contractAddress,
-        abi: abi as never,
-        functionName: "lastEndTime",
-        args: [address],
-      }),
-      publicClient.readContract({
-        address: contractAddress,
-        abi: abi as never,
-        functionName: "streak",
-        args: [address],
-      }),
-      publicClient.readContract({
-        address: contractAddress,
-        abi: abi as never,
-        functionName: "sessionsCompleted",
-        args: [address],
-      }),
-      publicClient.readContract({
-        address: contractAddress,
-        abi: abi as never,
-        functionName: "sessionsForfeited",
-        args: [address],
-      }),
-      publicClient.readContract({
-        address: contractAddress,
-        abi: abi as never,
-        functionName: "maxSessionDuration",
-      }),
-      publicClient.readContract({
-        address: contractAddress,
-        abi: abi as never,
-        functionName: "cooldownPeriod",
-      }),
-      publicClient.readContract({
-        address: contractAddress,
-        abi: abi as never,
-        functionName: "penaltyBps",
-      }),
-      publicClient.readContract({
-        address: contractAddress,
-        abi: abi as never,
-        functionName: "watchdogBps",
-      }),
-      publicClient.readContract({
-        address: contractAddress,
-        abi: abi as never,
-        functionName: "successBonusBps",
-      }),
-      publicClient.readContract({
-        address: contractAddress,
-        abi: abi as never,
-        functionName: "minStake",
-      }),
-      publicClient.readContract({
-        address: contractAddress,
-        abi: abi as never,
-        functionName: "rewardPool",
-      }),
-      publicClient.readContract({
-        address: contractAddress,
-        abi: abi as never,
-        functionName: "sponsoredStake",
-        args: [address],
-      }),
-    ]);
+    const results = (await publicClient.multicall({
+      contracts: contracts as never,
+      multicallAddress: MULTICALL3_ADDRESS,
+      allowFailure: true,
+    })) as MulticallEntry[];
+
+    // `allowFailure: true` returns { status, result } per call. Unwrap each,
+    // defaulting a reverting getter to a safe zero (minStake reverts on the
+    // deployed contract — see SessionCard's `?? 0n`). If EVERY call failed the
+    // request itself is unhealthy (RPC down / 429), so bail to undefined.
+    const anyOk = results.some((r) => r.status === "success");
+    if (!anyOk) {
+      console.error("[RestGuardian] loadState: every read failed", results[0]?.error);
+      return undefined;
+    }
+
+    const val = <T>(i: number, fallback: T): T =>
+      results[i]?.status === "success" ? (results[i].result as T) : fallback;
 
     return {
-      session: session as readonly [bigint, bigint, boolean],
-      lastEndTime: lastEndTime as bigint,
-      streak: streak as bigint,
-      sessionsCompleted: sessionsCompleted as bigint,
-      sessionsForfeited: sessionsForfeited as bigint,
-      maxSessionDuration: maxSessionDuration as bigint,
-      cooldownPeriod: cooldownPeriod as bigint,
-      penaltyBps: penaltyBps as bigint,
-      watchdogBps: watchdogBps as bigint,
-      successBonusBps: successBonusBps as bigint,
-      minStake: minStake as bigint,
-      rewardPool: rewardPool as bigint,
-      sponsoredStake: sponsoredStake as bigint,
+      session: val<readonly [bigint, bigint, boolean]>(0, [0n, 0n, false]),
+      lastEndTime: val<bigint>(1, 0n),
+      streak: val<bigint>(2, 0n),
+      sessionsCompleted: val<bigint>(3, 0n),
+      sessionsForfeited: val<bigint>(4, 0n),
+      maxSessionDuration: val<bigint>(5, 0n),
+      cooldownPeriod: val<bigint>(6, 0n),
+      penaltyBps: val<bigint>(7, 0n),
+      watchdogBps: val<bigint>(8, 0n),
+      successBonusBps: val<bigint>(9, 0n),
+      minStake: val<bigint>(10, 0n),
+      rewardPool: val<bigint>(11, 0n),
+      sponsoredStake: val<bigint>(12, 0n),
     };
-  } catch {
+  } catch (err) {
+    console.error("[RestGuardian] loadState multicall failed:", err);
     return undefined;
   }
 }
@@ -199,9 +171,14 @@ export async function buildPlan(
     return {
       intent,
       summary: "Can't reach the chain",
-      consequence: "RPC unreachable — check your network and try again.",
+      consequence:
+        "Couldn't read on-chain state from the Monad Testnet RPC. The public endpoint rate-limits at 15 requests/sec — if the page just loaded, wait a second and try again. Check the console for the exact error.",
       warnings: [],
-      receipt: ["❌ RPC error — unable to load on-chain state."],
+      receipt: [
+        "❌ Couldn't load on-chain state.",
+        "The public testnet-rpc.monad.xyz caps at 15 req/sec (HTTP 429) — wait a moment and retry.",
+        "If it persists: confirm your wallet is on Monad Testnet (10143).",
+      ],
       canSign: false,
       simulation: "skipped",
     };
