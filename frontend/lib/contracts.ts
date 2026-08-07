@@ -9,6 +9,14 @@ export const MONAD_TESTNET = {
   rpcUrls: {
     default: { http: ["https://testnet-rpc.monad.xyz"] },
   },
+  // Multicall3 is deployed at the canonical address on Monad testnet. Declaring
+  // it here lets viem batch many reads into a single eth_call — essential given
+  // the public RPC's 15 req/sec cap (the Leaderboard alone fans out ~48 reads).
+  contracts: {
+    multicall3: {
+      address: "0xcA11bde05977b3631167028862bE2a173976CA11" as `0x${string}`,
+    },
+  },
   blockExplorers: {
     default: {
       name: "MonadVision",

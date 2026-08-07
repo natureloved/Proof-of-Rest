@@ -41,6 +41,10 @@ function getConfig(): WagmiConfig {
       appName: "Proof of Rest",
       projectId: RAW_WC_ID!,
       chains: [MONAD_TESTNET],
+      transports: { [MONAD_TESTNET.id]: http() },
+      // Aggregate eth_call reads through Multicall3 to stay under the RPC's
+      // 15 req/sec cap (the Leaderboard alone fans out ~48 reads per cycle).
+      batch: { multicall: true },
       ssr: true,
     });
     return configSingleton;
@@ -65,6 +69,9 @@ function getConfig(): WagmiConfig {
     connectors,
     chains: [MONAD_TESTNET],
     transports: { [MONAD_TESTNET.id]: http() },
+    // Aggregate eth_call reads through Multicall3 to stay under the RPC's
+    // 15 req/sec cap (the Leaderboard alone fans out ~48 reads per cycle).
+    batch: { multicall: true },
     ssr: true,
   }) as unknown as WagmiConfig;
   return configSingleton;

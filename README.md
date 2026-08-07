@@ -64,6 +64,22 @@ Forfeited MON feeds `rewardPool` **inside the contract** — no external benefic
 needed. Successful sessions are paid back from the pool, which acts as an implicit
 leaderboard: the more you respect your breaks, the more you collect.
 
+## Technology stack
+
+| Layer | Stack |
+| --- | --- |
+| **Contracts** | Solidity `^0.8.24`, [Foundry](https://getfoundry.sh/) (forge/cast), OpenZeppelin (`Ownable`, `ReentrancyGuard`, ERC-721) |
+| **Chain** | Monad Testnet (EVM-equivalent, chain ID 10143); Multicall3 for batched reads |
+| **Frontend** | Next.js 15 (App Router), React 19, TypeScript |
+| **Web3** | wagmi 2 + viem 2, RainbowKit (WalletConnect with injected fallback) |
+| **State/data** | TanStack Query (polling + cache invalidation on tx) |
+| **Styling** | Tailwind CSS (forest/grass design tokens) |
+| **Agent** | Deterministic keyword/regex parser (default, keyless) + optional env-gated LLM (OpenAI-compatible) for intent classification only |
+
+Agent logic lives in `frontend/lib/agent/` — `intents.ts` (deterministic parser),
+`llm.ts` (optional classifier), `plan.ts` (discover→load→action→simulate builder),
+`errors.ts` (friendly error map). UI is `frontend/components/RestGuardian.tsx`.
+
 ## Contracts (Monad Testnet, chain ID 10143)
 
 Deployed & **verified on Sourcify / MonadVision**:
@@ -138,3 +154,23 @@ hackathon demo: free MON, no funds at risk.
 - RestGuardian's `start_session` duration is **advisory** — `maxSessionDuration` is
   a single contract-wide owner setting, so the agent states the real limit and flags
   any mismatch rather than pretending to set a per-session length.
+
+## Demo access
+
+No demo accounts or seeded logins — the app is fully self-serve on public testnet:
+
+1. Install any EVM wallet (e.g. MetaMask) and add **Monad Testnet** (chain ID
+   `10143`, RPC `https://testnet-rpc.monad.xyz`). RainbowKit will prompt to add/switch
+   the network on connect.
+2. Get free test MON from the [Monad faucet](https://faucet.monad.xyz/).
+3. Open the app, connect your wallet, and start a session — or just ask RestGuardian
+   *"what's in the pool and my streak?"* for a read-only walkthrough (no funds needed).
+
+No API key is required: the agent runs its deterministic parser by default. Set
+`NEXT_PUBLIC_OPENAI_API_KEY` in `frontend/.env.local` only if you want free-form
+LLM phrasing.
+
+## License
+
+Released under the [MIT License](LICENSE) — matching the `SPDX-License-Identifier: MIT`
+already declared in the Solidity sources.

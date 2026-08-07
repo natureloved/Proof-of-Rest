@@ -482,14 +482,24 @@ async function simulate(
   action: { functionName: string; args: readonly unknown[]; value?: bigint },
 ): Promise<SimResult> {
   try {
-    await publicClient.simulateContract({
-      address: contractAddress,
-      abi: abi as never,
-      functionName: action.functionName,
-      args: action.args as never,
-      value: action.value,
-      account,
-    });
+    // Race the simulation against a timeout. The public Monad RPC rate-limits
+    // at 15 req/sec, and a throttled eth_call can stall — without this the UI
+    // would hang on "Thinking…" indefinitely. On timeout we treat the action as
+    // un-simulatable (canSign:false) rather than blocking forever.
+    const timeout = new Promise<never>((_, reject) =>
+      setTimeout(() => reject(new Error("Simulation timed out — the RPC is rate-limited (15 req/sec). Try again in a moment.")), 12000),
+    );
+    await Promise.race([
+      publicClient.simulateContract({
+        address: contractAddress,
+        abi: abi as never,
+        functionName: action.functionName,
+        args: action.args as never,
+        value: action.value,
+        account,
+      }),
+      timeout,
+    ]);
     return { ok: true };
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);

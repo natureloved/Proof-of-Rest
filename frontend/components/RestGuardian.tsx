@@ -99,38 +99,59 @@ export function RestGuardian() {
       return;
     }
 
-    // discover → parse intent (LLM or deterministic) …
-    const intent = await classifyIntent(text);
-    console.info("[RestGuardian] intent", intent);
+    try {
+      // discover → parse intent (LLM or deterministic) …
+      const intent = await classifyIntent(text);
+      console.info("[RestGuardian] intent", intent);
 
-    // … → load state → build action → simulate → receipt
-    const built = await buildPlan(
-      intent,
-      publicClient as PublicClient,
-      address,
-      PROOF_OF_REST_ADDRESS,
-      PROOF_OF_REST_ABI,
-    );
-    console.info("[RestGuardian] plan", built);
+      // … → load state → build action → simulate → receipt
+      const built = await buildPlan(
+        intent,
+        publicClient as PublicClient,
+        address,
+        PROOF_OF_REST_ADDRESS,
+        PROOF_OF_REST_ABI,
+      );
+      console.info("[RestGuardian] plan", built);
 
-    const id = logSeq;
-    setLogSeq((n) => n + 1);
-    setActiveLogId(id);
-    setLog((prev) => [
-      {
-        id,
-        text,
-        intent: intent.kind,
-        source: intent.source,
-        action: built.action ? `${built.action.functionName}(${built.action.args.join(", ")})` : "—",
-        simulation: built.simulation,
-        signed: "not-signed",
-      },
-      ...prev,
-    ]);
+      const id = logSeq;
+      setLogSeq((n) => n + 1);
+      setActiveLogId(id);
+      setLog((prev) => [
+        {
+          id,
+          text,
+          intent: intent.kind,
+          source: intent.source,
+          action: built.action ? `${built.action.functionName}(${built.action.args.join(", ")})` : "—",
+          simulation: built.simulation,
+          signed: "not-signed",
+        },
+        ...prev,
+      ]);
 
-    setPlan(built);
-    setThinking(false);
+      setPlan(built);
+    } catch (err) {
+      // buildPlan guards its own reads, but a stalled/throwing RPC call (the
+      // public endpoint rate-limits at 15 req/sec) could still reject here.
+      // Surface it as a receipt instead of leaving the UI stuck on "Thinking…".
+      console.error("[RestGuardian] submit failed", err);
+      setPlan({
+        intent: { kind: "unknown", source: "deterministic", rawText: text },
+        summary: "Something went wrong",
+        consequence:
+          "The agent couldn't finish building your plan. The Monad Testnet RPC rate-limits at 15 req/sec — wait a moment and try again.",
+        warnings: [],
+        receipt: [
+          "❌ Couldn't complete the request.",
+          "The public testnet-rpc.monad.xyz caps at 15 req/sec — wait a second and retry.",
+        ],
+        canSign: false,
+        simulation: "skipped",
+      });
+    } finally {
+      setThinking(false);
+    }
   };
 
   const sign = () => {
