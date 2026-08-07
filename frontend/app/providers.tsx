@@ -41,10 +41,13 @@ function getConfig(): WagmiConfig {
       appName: "Proof of Rest",
       projectId: RAW_WC_ID!,
       chains: [MONAD_TESTNET],
-      transports: { [MONAD_TESTNET.id]: http() },
-      // Aggregate eth_call reads through Multicall3 to stay under the RPC's
-      // 15 req/sec cap (the Leaderboard alone fans out ~48 reads per cycle).
-      batch: { multicall: true },
+      // Retry throttled reads with backoff — the public RPC caps at 15 req/sec
+      // and a transient 429 shouldn't fail the whole request on first try.
+      transports: { [MONAD_TESTNET.id]: http(undefined, { retryCount: 4, retryDelay: 400 }) },
+      // Aggregate eth_call reads through Multicall3 to stay under the cap; the
+      // 16ms wait lets bursts (the Leaderboard fans out ~48 reads) coalesce
+      // into a single request instead of racing the limiter.
+      batch: { multicall: { wait: 16 } },
       ssr: true,
     });
     return configSingleton;
@@ -68,10 +71,13 @@ function getConfig(): WagmiConfig {
   configSingleton = createConfig({
     connectors,
     chains: [MONAD_TESTNET],
-    transports: { [MONAD_TESTNET.id]: http() },
-    // Aggregate eth_call reads through Multicall3 to stay under the RPC's
-    // 15 req/sec cap (the Leaderboard alone fans out ~48 reads per cycle).
-    batch: { multicall: true },
+    // Retry throttled reads with backoff — the public RPC caps at 15 req/sec
+    // and a transient 429 shouldn't fail the whole request on first try.
+    transports: { [MONAD_TESTNET.id]: http(undefined, { retryCount: 4, retryDelay: 400 }) },
+    // Aggregate eth_call reads through Multicall3 to stay under the cap; the
+    // 16ms wait lets bursts (the Leaderboard fans out ~48 reads) coalesce
+    // into a single request instead of racing the limiter.
+    batch: { multicall: { wait: 16 } },
     ssr: true,
   }) as unknown as WagmiConfig;
   return configSingleton;
